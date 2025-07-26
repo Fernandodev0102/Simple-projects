@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modelador de Fluxograma</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5; /* Fundo muito claro */
+            color: #2d3748; /* Cor do texto escuro */
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden; /* Evita barras de rolagem indesejadas */
+        }
+        .main-content-area {
+            display: flex;
+            flex: 1; /* Ocupa o restante da altura disponível */
+            position: relative; /* Para posicionar o botão de toggle da sidebar */
+        }
+        .sidebar {
+            width: 0; /* Inicialmente escondida */
+            min-width: 0; /* Importante para o flexbox colapsar */
+            background-color: #2d3748; /* Fundo escuro para a sidebar */
+            color: #ffffff;
+            padding: 0; /* Sem padding quando colapsada */
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            transition: width 0.3s ease-in-out, min-width 0.3s ease-in-out, padding 0.3s ease-in-out;
+            overflow-y: auto; /* Rolagem vertical para a lista de esquemas */
+            display: flex;
+            flex-direction: column;
+            gap: 1rem; /* Espaçamento entre os itens na sidebar */
+            flex-shrink: 0; /* Impede que a sidebar encolha */
+            z-index: 50; /* Garante que fique acima da área do fluxograma */
+        }
+        .sidebar.open {
+            width: 250px; /* Largura quando aberta */
+            min-width: 250px;
+            padding: 1rem; /* Restaura o padding */
+        }
+        .sidebar-item {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease-in-out;
+            display: flex; /* Para alinhar ícones e texto */
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .sidebar.open .sidebar-item {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .sidebar-toggle {
+            position: absolute;
+            left: 0; /* Alinhado com a borda esquerda da sidebar */
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: #3182ce; /* Cor vibrante para o botão */
+            color: white;
+            border: none;
+            padding: 0.5rem;
+            border-radius: 0 0.5rem 0.5rem 0; /* Bordas arredondadas apenas na direita */
+            cursor: pointer;
+            z-index: 60; /* Acima da sidebar */
+            transition: left 0.3s ease-in-out;
+        }
+        .sidebar.open + .sidebar-toggle {
+            left: 250px; /* Move o botão de toggle junto com a sidebar aberta */
+        }
+
+        .flowchart-container {
+            position: relative;
+            flex-grow: 1; /* Ocupa o restante da largura disponível */
+            background-color: #ffffff; /* Fundo branco da área do fluxograma */
+            background-image: linear-gradient(0deg, transparent 9px, rgba(0,0,0,0.05) 10px), linear-gradient(90deg, transparent 9px, rgba(0,0,0,0.05) 10px);
+            background-size: 10px 10px; /* Tamanho do quadriculado */
+            border-radius: 0.75rem; /* Cantos arredondados */
+            overflow: auto; /* Permite rolagem dentro da área do fluxograma */
+            margin: 1rem;
+            padding: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .block {
+            position: absolute;
+            background-color: #f7fafc; /* Cor de fundo do bloco (cinza muito claro) */
+            border: 1px solid #cbd5e0; /* Borda do bloco (cinza claro) */
+            border-radius: 0.5rem; /* Cantos arredondados */
+            padding: 0.75rem 1rem;
+            text-align: center;
+            cursor: grab;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.07);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.2s ease-in-out; /* Transição para hover e tamanho */
+            min-width: 120px; /* Largura mínima para blocos */
+            max-width: 250px; /* Largura máxima para blocos */
+            min-height: 60px; /* Altura mínima para blocos */
+            z-index: 10; /* Garante que os blocos fiquem acima das linhas */
+            color: #2d3748; /* Cor do texto do bloco (escuro) */
+        }
+        .block:hover {
+            transform: translateY(-2px); /* Efeito de "levantar" */
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15); /* Sombra mais pronunciada */
+            /* As cores de fundo e borda não mudam para manter o texto visível */
+        }
+        .block-main {
+            font-size: 1.1rem;
+            font-weight: 600;
+            background-color: #2d3748; /* Cor principal para blocos principais (cinza escuro) */
+            color: #ffffff; /* Texto branco */
+        }
+        .block-descendant {
+            font-size: 0.9rem;
+            background-color: #4a5568; /* Cor principal para blocos descendentes (cinza médio) */
+            color: #ffffff; /* Texto branco */
+        }
+        .block-text {
+            word-wrap: break-word;
+            max-width: 100%;
+            overflow-wrap: break-word; /* Garante que o texto quebre corretamente */
+            text-overflow: ellipsis; /* Mantém o ellipsis para textos muito longos que não cabem na largura máxima */
+            flex-grow: 1; /* Permite que o texto ocupe o espaço disponível */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.3;
+        }
+        .block-actions {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            display: flex;
+            gap: 0.25rem;
+            background-color: #ffffff; /* Fundo branco para as ações */
+            padding: 0.25rem;
+            border-radius: 0.5rem;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            z-index: 20; /* Garante que as ações fiquem acima do bloco */
+        }
+        .block:hover .block-actions {
+            opacity: 1;
+        }
+        .block-action-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #2d3748; /* Cor dos ícones (escuro) */
+            padding: 0.25rem;
+            border-radius: 0.25rem;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .block-action-button:hover {
+            background-color: #e2e8f0; /* Fundo do botão de ação ao passar o mouse */
+        }
+        .icon {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+            vertical-align: middle;
+        }
+        .svg-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Permite clicar nos blocos por baixo */
+            z-index: 5; /* Garante que as linhas fiquem abaixo dos blocos */
+        }
+        .line {
+            stroke: #4a5568; /* Cor da linha (cinza escuro para contraste no fundo branco) */
+            stroke-width: 2;
+            fill: none;
+        }
+
+        /* Modal Styling */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+        .modal-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: #f7fafc; /* Fundo do modal (cinza muito claro) */
+            padding: 2rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            width: 90%;
+            max-width: 400px;
+            color: #2d3748; /* Texto do modal (escuro) */
+        }
+        .modal-content h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        .modal-content input[type="text"],
+        .modal-content textarea {
+            width: 100%;
+            min-height: 40px; /* Altura mínima para input de texto */
+            background-color: #e2e8f0; /* Fundo do input/textarea (cinza claro) */
+            border: 1px solid #cbd5e0;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            color: #2d3748; /* Texto do input/textarea (escuro) */
+            resize: vertical;
+            margin-bottom: 1rem;
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+        .modal-button {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .modal-button-primary {
+            background-color: #3182ce; /* Cor vibrante para o botão primário (azul) */
+            color: #ffffff;
+        }
+        .modal-button-primary:hover {
+            background-color: #2b6cb0;
+        }
+        .modal-button-secondary {
+            background-color: #cbd5e0; /* Cor secundária (cinza claro) */
+            color: #2d3748;
+        }
+        .modal-button-secondary:hover {
+            background-color: #a0aec0;
+        }
+
+        /* Estilos para a lista de esquemas na sidebar */
+        .scheme-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            flex-grow: 1; /* Permite que a lista ocupe o espaço restante */
+            /* Removido display: flex; para que os itens da lista se empilhem */
+        }
+        .scheme-item {
+            display: flex; /* Mantém o flex para o conteúdo interno do item (nome e botões de ação) */
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0.75rem;
+            background-color: #4a5568; /* Fundo do item do esquema */
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+            color: #ffffff;
+        }
+        .scheme-item:hover {
+            background-color: #636b7a;
+        }
+        .scheme-item-name {
+            flex-grow: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .scheme-item-actions {
+            display: flex;
+            gap: 0.25rem;
+        }
+        .scheme-item-action-btn {
+            background: none;
+            border: none;
+            color: #ffffff;
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 0.25rem;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .scheme-item-action-btn:hover {
+            background-color: #2d3748;
+        }
+
+        /* Color picker modal styles */
+        .color-palette {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-top: 1rem;
+        }
+        .color-option {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: border-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .color-option:hover {
+            transform: scale(1.1);
+            border-color: #3182ce; /* Highlight color */
+        }
+        .color-option.selected {
+            border-color: #3182ce; /* Selected color highlight */
+            box-shadow: 0 0 0 3px #3182ce;
+        }
+
+        /* Highlight for connecting block */
+        .block.block-connecting-start {
+            border-color: #3182ce; /* Blue border */
+            box-shadow: 0 0 0 4px rgba(49, 130, 206, 0.5); /* Blue glow */
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+    <div class="main-content-area">
+        <div id="sidebar" class="sidebar">
+            <div class="sidebar-item">
+                <button id="addMainBlockBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 w-full">
+                    <svg class="icon inline-block mr-2" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Adicionar Bloco Principal
+                </button>
+            </div>
+            <div class="sidebar-item">
+                <button id="saveFlowchartBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 w-full">
+                    <svg class="icon inline-block mr-2" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M19 21H5C4.46957 21 3.98043 20.7893 3.61421 20.4231C3.24799 20.0569 3 19.5674 3 19V5C3 4.46957 3.24799 3.98043 3.61421 3.61421C3.98043 3.24799 4.46957 3 5 3H14.5L21 9.5V19C21 19.5304 20.7893 20.0391 20.4231 20.4142C20.0569 20.7893 19.5674 21 19 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M17 21V13H7V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M7 3V8H15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Salvar Esquema
+                </button>
+            </div>
+            <div class="sidebar-item">
+                <button id="newFlowchartBtn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 w-full">
+                    <svg class="icon inline-block mr-2" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2ZM12 20C7.58172 20 4 16.4183 4 12C4 7.58172 7.58172 4 12 4C16.4183 4 20 7.58172 20 12C20 16.4183 16.4183 20 12 20Z" fill="currentColor"/>
+                    </svg>
+                    Novo Esquema
+                </button>
+            </div>
+            <h4 class="text-lg font-semibold mt-4 mb-2 sidebar-item">Meus Esquemas</h4>
+            <ul id="schemeList" class="scheme-list">
+                <!-- Esquemas salvos serão carregados aqui -->
+                <li class="text-gray-400 text-center">Nenhum esquema salvo.</li>
+            </ul>
+        </div>
+
+        <button id="sidebarToggleBtn" class="sidebar-toggle">
+            <svg id="toggleIconOpen" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+            <svg id="toggleIconClose" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+
+        <div id="flowchartArea" class="flowchart-container">
+            <svg id="flowchartLines" class="svg-lines"></svg>
+        </div>
+    </div>
+
+    <!-- Modal de Edição de Bloco -->
+    <div id="editBlockModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Editar Texto do Bloco</h3>
+            <textarea id="blockTextInput" placeholder="Digite o texto do bloco aqui..."></textarea>
+            <div class="modal-buttons">
+                <button id="cancelEditBlockBtn" class="modal-button modal-button-secondary">Cancelar</button>
+                <button id="saveEditBlockBtn" class="modal-button modal-button-primary">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Salvar Esquema -->
+    <div id="saveFlowchartModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Salvar Esquema</h3>
+            <input type="text" id="flowchartNameInput" placeholder="Nome do esquema" class="mb-4" />
+            <div class="modal-buttons">
+                <button id="cancelSaveFlowchartBtn" class="modal-button modal-button-secondary">Cancelar</button>
+                <button id="confirmSaveFlowchartBtn" class="modal-button modal-button-primary">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação Genérico -->
+    <div id="confirmationModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="confirmationModalTitle"></h3>
+            <p id="confirmationModalText" class="mb-4 text-center"></p>
+            <div class="modal-buttons justify-center">
+                <button id="cancelConfirmBtn" class="modal-button modal-button-secondary">Cancelar</button>
+                <button id="confirmActionBtn" class="modal-button modal-button-primary bg-red-600 hover:bg-red-700">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Seleção de Cores -->
+    <div id="colorPickerModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Selecionar Cor do Bloco</h3>
+            <div id="colorPalette" class="color-palette">
+                <!-- As opções de cor serão geradas aqui pelo JS -->
+            </div>
+            <div class="modal-buttons justify-center mt-4">
+                <button id="closeColorPickerBtn" class="modal-button modal-button-secondary">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Variáveis globais
+        let blocks = [];
+        let customConnections = []; // Nova variável para armazenar conexões personalizadas
+        let editingBlockId = null;
+        let currentFlowchartId = null; // ID do esquema atualmente carregado
+        let currentFlowchartName = ''; // Nome do esquema atualmente carregado
+        let currentColorBlockId = null; // ID do bloco cuja cor está sendo editada
+
+        let isConnecting = false; // Estado para a ferramenta de conexão
+        let startBlockForConnection = null; // ID do bloco de início da conexão
+
+        // Cores predefinidas para os blocos
+        const blockColors = [
+            '#2d3748', // Cinza Escuro (Padrão Principal)
+            '#4a5568', // Cinza Médio (Padrão Descendente)
+            '#e53e3e', // Vermelho (Urgência)
+            '#dd6b20', // Laranja (Ação Necessária)
+            '#38a169', // Verde (Concluído)
+            '#3182ce', // Azul (Informação)
+            '#805ad5', // Roxo (Estudo)
+            '#d69e2e', // Amarelo Ouro (Revisão)
+            '#00a3c4', // Ciano/Teal (Análise)
+            '#d53f8c'  // Rosa (Feedback)
+        ];
+
+        // Referências aos elementos do DOM
+        const flowchartArea = document.getElementById('flowchartArea');
+        const flowchartLines = document.getElementById('flowchartLines');
+        const addMainBlockBtn = document.getElementById('addMainBlockBtn');
+        const saveFlowchartBtn = document.getElementById('saveFlowchartBtn');
+        const newFlowchartBtn = document.getElementById('newFlowchartBtn');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
+        const toggleIconOpen = document.getElementById('toggleIconOpen');
+        const toggleIconClose = document.getElementById('toggleIconClose');
+        const schemeList = document.getElementById('schemeList');
+
+        // Modais
+        const editBlockModal = document.getElementById('editBlockModal');
+        const blockTextInput = document.getElementById('blockTextInput');
+        const saveEditBlockBtn = document.getElementById('saveEditBlockBtn');
+        const cancelEditBlockBtn = document.getElementById('cancelEditBlockBtn');
+
+        const saveFlowchartModal = document.getElementById('saveFlowchartModal');
+        const flowchartNameInput = document.getElementById('flowchartNameInput');
+        const confirmSaveFlowchartBtn = document.getElementById('confirmSaveFlowchartBtn');
+        const cancelSaveFlowchartBtn = document.getElementById('cancelSaveFlowchartBtn');
+
+        const confirmationModal = document.getElementById('confirmationModal');
+        const confirmationModalTitle = document.getElementById('confirmationModalTitle');
+        const confirmationModalText = document.getElementById('confirmationModalText');
+        let confirmationCallback = null; // Callback para a ação de confirmação
+
+        const colorPickerModal = document.getElementById('colorPickerModal');
+        const colorPalette = document.getElementById('colorPalette');
+        const closeColorPickerBtn = document.getElementById('closeColorPickerBtn');
+
+        // --- Funções Auxiliares ---
+
+        // Função para mostrar um modal genérico
+        function showModal(modalElement) {
+            modalElement.classList.add('open');
+        }
+
+        // Função para esconder um modal genérico
+        function hideModal(modalElement) {
+            modalElement.classList.remove('open');
+        }
+
+        // Função para mostrar o modal de confirmação
+        function showConfirmationModal(title, text, onConfirm) {
+            confirmationModalTitle.textContent = title;
+            confirmationModalText.textContent = text;
+            confirmationCallback = onConfirm; // Armazena o callback
+            showModal(confirmationModal);
+        }
+
+        // Função para gerar um ID único para os blocos
+        function generateId() {
+            return '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // --- Funções de Fluxograma ---
+
+        // Função para renderizar (ou re-renderizar) todo o fluxograma
+        function renderFlowchart() {
+            // Limpa a área do fluxograma e as linhas
+            flowchartArea.querySelectorAll('.block').forEach(block => block.remove());
+            flowchartLines.innerHTML = '';
+
+            // Renderiza cada bloco
+            blocks.forEach(block => {
+                const blockElement = document.createElement('div');
+                blockElement.id = `block-${block.id}`;
+                blockElement.classList.add('block', 'rounded-lg', 'shadow-md', 'flex', 'items-center', 'justify-center');
+
+                // Aplica a cor de fundo e a cor do texto do bloco
+                blockElement.style.backgroundColor = block.color || (block.type === 'main' ? '#2d3748' : '#4a5568');
+                // Define a cor do texto para branco para todas as cores de bloco personalizadas
+                if (block.color) {
+                    blockElement.style.color = '#ffffff';
+                } else {
+                    // Mantém a cor do texto padrão se não houver cor personalizada
+                    blockElement.style.color = '#ffffff'; // Para main e descendant padrões
+                }
+
+                // Adiciona a classe de highlight se for o bloco de início de conexão
+                if (isConnecting && startBlockForConnection === block.id) {
+                    blockElement.classList.add('block-connecting-start');
+                }
+
+
+                blockElement.style.left = `${block.x}px`;
+                blockElement.style.top = `${block.y}px`;
+                blockElement.innerHTML = `
+                    <div class="block-text">${block.text}</div>
+                    <div class="block-actions">
+                        <button class="block-action-button add-descendant-btn" data-id="${block.id}" title="Adicionar Bloco Descendente">
+                            <svg class="icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <button class="block-action-button edit-block-btn" data-id="${block.id}" title="Editar Bloco">
+                            <svg class="icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M11 4H4C3.46957 4 2.96086 4.21071 2.58579 4.58579C2.21071 4.96086 2 5.46957 2 6V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96086 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M18.5 2.5C18.8978 2.10217 19.4391 1.87868 20 1.87868C20.5609 1.87868 21.1022 2.10217 21.5 2.5C21.8978 2.89782 22.1213 3.43914 22.1213 4C22.1213 4.56086 21.8978 5.10217 21.5 5.5L12 15L8 16L9 12L18.5 2.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <button class="block-action-button color-edit-btn" data-id="${block.id}" title="Editar Cor">
+                            <svg class="icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2ZM12 4C16.4183 4 20 7.58172 20 12C20 16.4183 16.4183 20 12 20C7.58172 20 4 16.4183 4 12C4 7.58172 7.58172 4 12 4Z" fill="currentColor"/>
+                                <path d="M12 6C9.79086 6 8 7.79086 8 10C8 12.2091 9.79086 14 12 14C14.2091 14 16 12.2091 16 10C16 7.79086 14.2091 6 12 6ZM12 12C10.8954 12 10 11.1046 10 10C10 8.89543 10.8954 8 12 8C13.1046 8 14 8.89543 14 10C14 11.1046 13.1046 12 12 12Z" fill="currentColor"/>
+                            </svg>
+                        </button>
+                        <button class="block-action-button connect-block-btn" data-id="${block.id}" title="Conectar Blocos">
+                            <svg class="icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M13 11a1 1 0 100-2 1 1 0 000 2zM17 11a1 1 0 100-2 1 1 0 000 2zM12 12h-2a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2v3a2 2 0 01-2 2zM16 16h-2a2 2 0 01-2-2v-3a2 2 0 012-2h2a2 2 0 012 2v3a2 2 0 01-2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <button class="block-action-button delete-block-btn" data-id="${block.id}" title="Remover Bloco">
+                            <svg class="icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M3 6H5H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                `;
+                flowchartArea.appendChild(blockElement);
+            });
+
+            // Desenha as linhas entre os blocos pai e filho com a lógica de "cabeamento"
+            blocks.forEach(block => {
+                if (block.parentId) {
+                    const parentBlock = blocks.find(b => b.id === block.parentId);
+                    if (parentBlock) {
+                        const parentElement = document.getElementById(`block-${parentBlock.id}`);
+                        const childElement = document.getElementById(`block-${block.id}`);
+
+                        if (parentElement && childElement) {
+                            const parentRect = parentElement.getBoundingClientRect();
+                            const childRect = childElement.getBoundingClientRect();
+                            const flowchartRect = flowchartArea.getBoundingClientRect();
+
+                            // Coordenadas relativas à área do fluxograma
+                            const parentX = parentRect.left + parentRect.width / 2 - flowchartRect.left;
+                            const parentY = parentRect.top + parentRect.height - flowchartRect.top; // Parte inferior do pai
+
+                            const childX = childRect.left + childRect.width / 2 - flowchartRect.left;
+                            const childY = childRect.top - flowchartRect.top; // Parte superior do filho
+
+                            // Lógica de "cabeamento": linha vertical, horizontal, vertical
+                            const midY = parentY + (childY - parentY) / 2; // Ponto médio vertical entre pai e filho
+
+                            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                            let pathData = `M ${parentX},${parentY} `; // Começa na parte inferior do pai
+                            pathData += `L ${parentX},${midY} `;      // Desce verticalmente até o meio
+                            pathData += `L ${childX},${midY} `;       // Move horizontalmente até a posição X do filho
+                            pathData += `L ${childX},${childY}`;      // Sobe verticalmente até a parte superior do filho
+
+                            path.setAttribute('d', pathData);
+                            path.classList.add('line');
+                            flowchartLines.appendChild(path);
+                        }
+                    }
+                }
+            });
+
+            // Desenha as conexões personalizadas
+            customConnections.forEach(connection => {
+                const startBlock = blocks.find(b => b.id === connection.startBlockId);
+                const endBlock = blocks.find(b => b.id === connection.endBlockId);
+
+                if (startBlock && endBlock) {
+                    const startElement = document.getElementById(`block-${startBlock.id}`);
+                    const endElement = document.getElementById(`block-${endBlock.id}`);
+
+                    if (startElement && endElement) {
+                        const startRect = startElement.getBoundingClientRect();
+                        const endRect = endElement.getBoundingClientRect();
+                        const flowchartRect = flowchartArea.getBoundingClientRect();
+
+                        // Coordenadas relativas à área do fluxograma
+                        const startX = startRect.left + startRect.width / 2 - flowchartRect.left;
+                        const startY = startRect.top + startRect.height / 2 - flowchartRect.top; // Centro do bloco de início
+
+                        const endX = endRect.left + endRect.width / 2 - flowchartRect.left;
+                        const endY = endRect.top + endRect.height / 2 - flowchartRect.top; // Centro do bloco de destino
+
+                        // Lógica de "cabeamento" para conexões personalizadas (vertical, horizontal, vertical)
+                        const midY = startY + (endY - startY) / 2;
+
+                        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        let pathData = `M ${startX},${startY} `;
+                        pathData += `L ${startX},${midY} `;
+                        pathData += `L ${endX},${midY} `;
+                        pathData += `L ${endX},${endY}`;
+
+                        path.setAttribute('d', pathData);
+                        path.classList.add('line');
+                        flowchartLines.appendChild(path);
+                    }
+                }
+            });
+
+            // Adiciona event listeners para os novos botões de ação
+            addEventListenersToBlocks();
+        }
+
+        // Função para adicionar um novo bloco principal
+        addMainBlockBtn.addEventListener('click', () => {
+            const newBlock = {
+                id: generateId(),
+                text: 'Novo Bloco Principal',
+                type: 'main',
+                parentId: null,
+                x: 50 + Math.random() * (flowchartArea.offsetWidth - 200), // Posição aleatória inicial
+                y: 50 + Math.random() * (flowchartArea.offsetHeight - 150),
+                color: null // Nova propriedade para a cor do bloco
+            };
+            blocks.push(newBlock);
+            renderFlowchart();
+        });
+
+        // Função para adicionar um bloco descendente
+        function addDescendantBlock(parentId) {
+            const parentBlock = blocks.find(b => b.id === parentId);
+            if (parentBlock) {
+                const newBlock = {
+                    id: generateId(),
+                    text: 'Novo Bloco Descendente',
+                    type: 'descendant',
+                    parentId: parentId,
+                    x: parentBlock.x + 50, // Posição relativa ao pai
+                    y: parentBlock.y + parentBlock.height + 80, // Abaixo do pai
+                    color: null // Nova propriedade para a cor do bloco
+                };
+                blocks.push(newBlock);
+                renderFlowchart();
+            }
+        }
+
+        // Função para abrir o modal de edição de bloco
+        function openEditBlockModal(blockId) {
+            editingBlockId = blockId;
+            const block = blocks.find(b => b.id === blockId);
+            if (block) {
+                blockTextInput.value = block.text;
+                showModal(editBlockModal);
+            }
+        }
+
+        // Função para fechar o modal de edição de bloco
+        function closeEditBlockModal() {
+            hideModal(editBlockModal);
+            editingBlockId = null;
+            blockTextInput.value = '';
+        }
+
+        // Event listener para salvar a edição do bloco
+        saveEditBlockBtn.addEventListener('click', () => {
+            if (editingBlockId) {
+                const block = blocks.find(b => b.id === editingBlockId);
+                if (block) {
+                    block.text = blockTextInput.value;
+                    renderFlowchart(); // Re-renderiza para ajustar o tamanho do bloco
+                }
+            }
+            closeEditBlockModal();
+        });
+
+        // Event listener para cancelar a edição do bloco
+        cancelEditBlockBtn.addEventListener('click', () => {
+            closeEditBlockModal();
+        });
+
+        // Função para deletar um bloco e seus descendentes
+        function deleteBlock(blockIdToDelete) {
+            // Encontra todos os IDs de blocos a serem deletados (o próprio bloco e seus descendentes)
+            const idsToDelete = [blockIdToDelete];
+            let i = 0;
+            while (i < idsToDelete.length) {
+                const currentId = idsToDelete[i];
+                blocks.forEach(block => {
+                    if (block.parentId === currentId && !idsToDelete.includes(block.id)) {
+                        idsToDelete.push(block.id);
+                    }
+                });
+                i++;
+            }
+
+            // Filtra os blocos, mantendo apenas os que não estão na lista de exclusão
+            blocks = blocks.filter(block => !idsToDelete.includes(block.id));
+
+            // Filtra as conexões personalizadas que envolvem os blocos deletados
+            customConnections = customConnections.filter(conn =>
+                !idsToDelete.includes(conn.startBlockId) && !idsToDelete.includes(conn.endBlockId)
+            );
+
+            renderFlowchart();
+        }
+
+        // Adiciona event listeners para os botões de ação dos blocos (edição, adição de descendente, remoção, edição de cor, conexão)
+        function addEventListenersToBlocks() {
+            document.querySelectorAll('.add-descendant-btn').forEach(button => {
+                button.onclick = (e) => {
+                    e.stopPropagation(); // Evita que o clique no botão ative o arrastar do bloco
+                    addDescendantBlock(button.dataset.id);
+                };
+            });
+
+            document.querySelectorAll('.edit-block-btn').forEach(button => {
+                button.onclick = (e) => {
+                    e.stopPropagation();
+                    openEditBlockModal(button.dataset.id);
+                };
+            });
+
+            document.querySelectorAll('.color-edit-btn').forEach(button => {
+                button.onclick = (e) => {
+                    e.stopPropagation();
+                    openColorPickerModal(button.dataset.id);
+                };
+            });
+
+            document.querySelectorAll('.connect-block-btn').forEach(button => {
+                button.onclick = (e) => {
+                    e.stopPropagation();
+                    const clickedBlockId = button.dataset.id;
+
+                    if (!isConnecting) {
+                        // Inicia uma nova conexão
+                        isConnecting = true;
+                        startBlockForConnection = clickedBlockId;
+                        // Adiciona destaque visual ao bloco de início
+                        document.getElementById(`block-${startBlockForConnection}`).classList.add('block-connecting-start');
+                        console.log(`Iniciando conexão de: ${startBlockForConnection}`);
+                    } else {
+                        // Finaliza a tentativa de conexão
+                        const endBlockId = clickedBlockId;
+
+                        // Remove destaque visual do bloco de início
+                        document.getElementById(`block-${startBlockForConnection}`).classList.remove('block-connecting-start');
+
+                        if (startBlockForConnection === endBlockId) {
+                            console.log("Conexão cancelada: clicou no mesmo bloco.");
+                        } else {
+                            // Conexão válida, cria a conexão personalizada
+                            addCustomConnection(startBlockForConnection, endBlockId);
+                            console.log(`Conexão criada de ${startBlockForConnection} para ${endBlockId}`);
+                        }
+
+                        // Reseta o estado de conexão
+                        isConnecting = false;
+                        startBlockForConnection = null;
+                    }
+                };
+            });
+
+            document.querySelectorAll('.delete-block-btn').forEach(button => {
+                button.onclick = (e) => {
+                    e.stopPropagation();
+                    showConfirmationModal('Confirmar Exclusão', 'Tem certeza de que deseja excluir este bloco e todos os seus descendentes?', () => deleteBlock(button.dataset.id));
+                };
+            });
+
+            // Lógica de arrastar e soltar (drag and drop)
+            document.querySelectorAll('.block').forEach(blockElement => {
+                let isDragging = false;
+                let currentBlock = null;
+                let offsetX, offsetY;
+
+                blockElement.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    currentBlock = blocks.find(b => `block-${b.id}` === blockElement.id);
+                    if (currentBlock) {
+                        offsetX = e.clientX - blockElement.getBoundingClientRect().left;
+                        offsetY = e.clientY - blockElement.getBoundingClientRect().top;
+                        blockElement.style.cursor = 'grabbing';
+                        blockElement.style.zIndex = 100; // Traz o bloco arrastado para a frente
+                    }
+                });
+
+                flowchartArea.addEventListener('mousemove', (e) => {
+                    if (!isDragging || !currentBlock) return;
+
+                    const flowchartRect = flowchartArea.getBoundingClientRect();
+                    let newX = e.clientX - flowchartRect.left - offsetX;
+                    let newY = e.clientY - flowchartRect.top - offsetY;
+
+                    // Limita o bloco dentro da área do fluxograma
+                    newX = Math.max(0, Math.min(newX, flowchartArea.offsetWidth - blockElement.offsetWidth));
+                    newY = Math.max(0, Math.min(newY, flowchartArea.offsetHeight - blockElement.offsetHeight));
+
+                    currentBlock.x = newX;
+                    currentBlock.y = newY;
+
+                    blockElement.style.left = `${newX}px`;
+                    blockElement.style.top = `${newY}px`;
+
+                    // Re-renderiza as linhas em tempo real
+                    renderFlowchart();
+                });
+
+                flowchartArea.addEventListener('mouseup', () => {
+                    isDragging = false;
+                    if (blockElement) {
+                        blockElement.style.cursor = 'grab';
+                        blockElement.style.zIndex = 10; // Volta o z-index ao normal
+                    }
+                    currentBlock = null;
+                });
+
+                // Previne o comportamento padrão de arrastar imagens
+                blockElement.ondragstart = () => false;
+            });
+        }
+
+        // --- Funções de Conexão Personalizada ---
+
+        // Função para adicionar uma nova conexão personalizada
+        function addCustomConnection(startId, endId) {
+            const newConnection = {
+                id: generateId(),
+                startBlockId: startId,
+                endBlockId: endId
+            };
+            customConnections.push(newConnection);
+            renderFlowchart();
+            saveFlowchart(currentFlowchartId, currentFlowchartName); // Salva após adicionar conexão
+        }
+
+        // --- Funções de Armazenamento (localStorage) ---
+
+        const LOCAL_STORAGE_KEY_PREFIX = 'flowchart_app_';
+        const LOCAL_STORAGE_LIST_KEY = LOCAL_STORAGE_KEY_PREFIX + 'flowchart_list';
+
+        // Função para obter todos os esquemas do localStorage
+        function getFlowchartsFromLocalStorage() {
+            const data = localStorage.getItem(LOCAL_STORAGE_LIST_KEY);
+            return data ? JSON.parse(data) : {};
+        }
+
+        // Função para salvar um esquema no localStorage
+        async function saveFlowchart(idToSave = null, nameToSave = '') {
+            let flowcharts = getFlowchartsFromLocalStorage();
+            let flowchartId = idToSave;
+            let flowchartName = nameToSave;
+
+            if (!flowchartId) { // Se for um novo esquema, abre modal para nome
+                showModal(saveFlowchartModal);
+                flowchartNameInput.value = currentFlowchartName || '';
+
+                try {
+                    flowchartName = await new Promise((resolve, reject) => {
+                        const handleConfirm = () => {
+                            const name = flowchartNameInput.value.trim();
+                            if (!name) {
+                                showConfirmationModal('Nome Inválido', 'Por favor, insira um nome para o esquema.', () => {});
+                                return;
+                            }
+                            confirmSaveFlowchartBtn.onclick = null;
+                            cancelSaveFlowchartBtn.onclick = null;
+                            resolve(name);
+                        };
+                        const handleCancel = () => {
+                            confirmSaveFlowchartBtn.onclick = null;
+                            cancelSaveFlowchartBtn.onclick = null;
+                            reject(new Error("Salvamento cancelado."));
+                        };
+
+                        confirmSaveFlowchartBtn.onclick = handleConfirm;
+                        cancelSaveFlowchartBtn.onclick = handleCancel;
+                    });
+
+                    flowchartId = generateId(); // Gera um novo ID para o esquema
+                    currentFlowchartId = flowchartId;
+                    currentFlowchartName = flowchartName;
+                    hideModal(saveFlowchartModal);
+
+                } catch (error) {
+                    console.log(error.message);
+                    hideModal(saveFlowchartModal);
+                    return;
+                }
+            }
+
+            // Salva o esquema no localStorage
+            flowcharts[flowchartId] = {
+                id: flowchartId,
+                name: flowchartName || 'Esquema Sem Nome',
+                blocks: JSON.stringify(blocks), // Serializa os blocos para string
+                customConnections: JSON.stringify(customConnections), // Salva conexões personalizadas
+                updatedAt: new Date().toISOString()
+            };
+            localStorage.setItem(LOCAL_STORAGE_LIST_KEY, JSON.stringify(flowcharts));
+            loadFlowchartsList(); // Atualiza a lista na sidebar
+
+            console.log("Esquema salvo com sucesso no localStorage!");
+            if (!idToSave) { // Mostra sucesso apenas se foi um salvamento manual de um novo esquema
+                showConfirmationModal('Sucesso!', `Esquema "${flowchartName}" salvo com sucesso!`, () => {});
+            }
+        }
+
+        // Função para carregar um esquema específico do localStorage
+        function loadFlowchart(flowchartId) {
+            const flowcharts = getFlowchartsFromLocalStorage();
+            const flowchartData = flowcharts[flowchartId];
+
+            if (flowchartData) {
+                blocks = JSON.parse(flowchartData.blocks); // Deserializa os blocos
+                customConnections = JSON.parse(flowchartData.customConnections || '[]'); // Carrega conexões, padrão para array vazio
+                currentFlowchartId = flowchartId;
+                currentFlowchartName = flowchartData.name;
+                renderFlowchart();
+                console.log(`Esquema "${flowchartData.name}" carregado do localStorage.`);
+            } else {
+                showConfirmationModal('Erro', 'Esquema não encontrado no armazenamento local.', () => {});
+                console.log("Nenhum esquema encontrado com este ID no localStorage!");
+            }
+        }
+
+        // Função para deletar um esquema do localStorage
+        function deleteFlowchartFromLocal(flowchartId) {
+            let flowcharts = getFlowchartsFromLocalStorage();
+            if (flowcharts[flowchartId]) {
+                delete flowcharts[flowchartId];
+                localStorage.setItem(LOCAL_STORAGE_LIST_KEY, JSON.stringify(flowcharts));
+                console.log("Esquema deletado do localStorage!");
+                if (currentFlowchartId === flowchartId) {
+                    newFlowchart(); // Limpa o canvas se o esquema deletado era o atual
+                }
+                loadFlowchartsList(); // Atualiza a lista na sidebar
+            } else {
+                showConfirmationModal('Erro', 'Esquema não encontrado para exclusão.', () => {});
+            }
+        }
+
+        // Função para iniciar um novo esquema (limpar o canvas)
+        function newFlowchart() {
+            showConfirmationModal('Novo Esquema', 'Tem certeza que deseja iniciar um novo esquema? O esquema atual não salvo será perdido.', () => {
+                blocks = [];
+                customConnections = []; // Limpa conexões personalizadas
+                currentFlowchartId = null;
+                currentFlowchartName = '';
+                renderFlowchart();
+                console.log("Novo esquema iniciado.");
+            });
+        }
+
+        // Função para carregar e exibir a lista de esquemas na sidebar
+        function loadFlowchartsList() {
+            const flowcharts = getFlowchartsFromLocalStorage();
+            schemeList.innerHTML = ''; // Limpa a lista atual
+
+            const sortedFlowcharts = Object.values(flowcharts).sort((a, b) => {
+                // Ordena por data de atualização, mais recente primeiro
+                return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+            });
+
+            if (sortedFlowcharts.length === 0) {
+                schemeList.innerHTML = '<li class="text-gray-400 text-center">Nenhum esquema salvo.</li>';
+            } else {
+                sortedFlowcharts.forEach((scheme) => {
+                    const listItem = document.createElement('li');
+                    listItem.classList.add('scheme-item');
+                    listItem.innerHTML = `
+                        <span class="scheme-item-name">${scheme.name || 'Esquema Sem Nome'}</span>
+                        <div class="scheme-item-actions">
+                            <button class="scheme-item-action-btn load-scheme-btn" data-id="${scheme.id}" title="Carregar Esquema">
+                                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2ZM12 20C7.58172 20 4 16.4183 4 12C4 7.58172 7.58172 4 12 4C16.4183 4 20 7.58172 20 12C20 16.4183 16.4183 20 12 20Z" fill="currentColor"/>
+                                    <path d="M9 12L11 14L15 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                            <button class="scheme-item-action-btn delete-scheme-btn" data-id="${scheme.id}" title="Deletar Esquema">
+                                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M3 6H5H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                    `;
+                    schemeList.appendChild(listItem);
+                });
+
+                // Adiciona listeners para os botões de carregar e deletar esquemas
+                document.querySelectorAll('.load-scheme-btn').forEach(button => {
+                    button.onclick = (e) => {
+                        e.stopPropagation();
+                        loadFlowchart(button.dataset.id);
+                    };
+                });
+                document.querySelectorAll('.delete-scheme-btn').forEach(button => {
+                    button.onclick = (e) => {
+                        e.stopPropagation();
+                        showConfirmationModal('Confirmar Exclusão', 'Tem certeza de que deseja excluir este esquema permanentemente?', () => deleteFlowchartFromLocal(button.dataset.id));
+                    };
+                });
+            }
+        }
+
+        // --- Funções de Seleção de Cor ---
+
+        // Função para abrir o modal de seleção de cor
+        function openColorPickerModal(blockId) {
+            currentColorBlockId = blockId;
+            colorPalette.innerHTML = ''; // Limpa a paleta de cores anterior
+            const currentBlock = blocks.find(b => b.id === blockId);
+
+            blockColors.forEach(color => {
+                const colorOption = document.createElement('div');
+                colorOption.classList.add('color-option');
+                colorOption.style.backgroundColor = color;
+                colorOption.dataset.color = color; // Armazena a cor no dataset
+
+                // Adiciona a classe 'selected' se for a cor atual do bloco
+                if (currentBlock && currentBlock.color === color) {
+                    colorOption.classList.add('selected');
+                } else if (!currentBlock.color && 
+                           ((currentBlock.type === 'main' && color === '#2d3748') || 
+                            (currentBlock.type === 'descendant' && color === '#4a5568'))) {
+                    // Marca a cor padrão se nenhuma cor personalizada estiver definida
+                    colorOption.classList.add('selected');
+                }
+
+                colorOption.onclick = () => {
+                    selectBlockColor(blockId, color);
+                    hideModal(colorPickerModal); // Fecha o modal após a seleção
+                };
+                colorPalette.appendChild(colorOption);
+            });
+
+            showModal(colorPickerModal);
+        }
+
+        // Função para aplicar a cor selecionada ao bloco
+        function selectBlockColor(blockId, color) {
+            const block = blocks.find(b => b.id === blockId);
+            if (block) {
+                block.color = color;
+                renderFlowchart(); // Re-renderiza para aplicar a nova cor
+                saveFlowchart(currentFlowchartId, currentFlowchartName); // Salva a alteração de cor
+            }
+        }
+
+        // Event listener para fechar o modal de seleção de cor
+        closeColorPickerBtn.addEventListener('click', () => {
+            hideModal(colorPickerModal);
+            currentColorBlockId = null;
+        });
+
+        // --- Event Listeners Globais ---
+
+        // Lógica para alternar a barra lateral
+        sidebarToggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+            toggleIconOpen.classList.toggle('hidden');
+            toggleIconClose.classList.toggle('hidden');
+        });
+
+        // Botões de ação do fluxograma
+        saveFlowchartBtn.addEventListener('click', () => saveFlowchart(currentFlowchartId, currentFlowchartName));
+        newFlowchartBtn.addEventListener('click', newFlowchart);
+
+        // Botões do modal de confirmação
+        document.getElementById('confirmActionBtn').addEventListener('click', () => {
+            if (confirmationCallback) {
+                confirmationCallback();
+            }
+            hideModal(confirmationModal);
+        });
+        document.getElementById('cancelConfirmBtn').addEventListener('click', () => {
+            hideModal(confirmationModal);
+        });
+
+        // --- Inicialização da Aplicação ---
+        window.onload = () => {
+            loadFlowchartsList(); // Carrega a lista de esquemas do localStorage
+            renderFlowchart(); // Renderiza um canvas vazio inicialmente
+        };
+
+        // Adiciona um listener para redimensionamento da janela para atualizar as linhas
+        window.addEventListener('resize', renderFlowchart);
+
+    </script>
+</body>
+</html>
