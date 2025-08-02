@@ -1,0 +1,1581 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciador de Gastos Pessoais (EconFinancas 4 - Simples)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* Variáveis de Cores - Tema Escuro Padrão */
+        :root {
+            --primary-bg: #121212; /* Fundo principal (quase preto) */
+            --secondary-bg: #1E1E1E; /* Fundo de componentes (cinza escuro) */
+            --text-color: #E0E0E0; /* Cor principal do texto (off-white) */
+            --light-text-color: #B0B0B0; /* Cor secundária do texto (cinza claro) */
+            --highlight-color: #FFFFFF; /* Branco para destaque e botões */
+            --highlight-dark: #CCCCCC; /* Cinza mais claro para hover */
+            --border-color: #444444; /* Cinza escuro para bordas */
+            --negative-color: #FF6B6B; /* Vermelho para valores negativos/exclusão */
+            --negative-dark: #FF4757; /* Vermelho mais escuro para hover */
+            --shadow-light: rgba(0, 0, 0, 0.25); /* Sombra suave */
+            --shadow-medium: rgba(0, 0, 0, 0.40); /* Sombra média */
+
+            /* Cores de feedback (mantidas para clareza) */
+            --success-color: #28a745;
+            --error-color: #dc3545;
+            --info-color: #17a2b8;
+
+            /* Novas cores para saldo/orçamento */
+            --positive-balance: #4CAF50; /* Verde para saldo positivo */
+            --negative-balance: #FF6B6B; /* Vermelho para saldo negativo */
+            --neutral-balance: #B0B0B0; /* Cinza para saldo neutro/zero */
+            --blue-button: #007bff; /* Novo: Azul para o botão de edição */
+            --blue-button-dark: #0056b3; /* Novo: Azul mais escuro para hover */
+        }
+
+        /* Custom Scrollbar Styles (for Webkit browsers like Chrome, Edge, Safari) */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px; /* For horizontal scrollbar */
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--primary-bg);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--light-text-color);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-color);
+        }
+
+        /* Reset básico e configurações globais */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--primary-bg);
+            color: var(--text-color);
+            line-height: 1.6;
+            display: flex; /* Usa flexbox para o body */
+            flex-direction: column; /* Empilha os filhos verticalmente */
+            align-items: center; /* Centraliza os filhos horizontalmente */
+            min-height: 100vh; /* Garante que o body ocupe a altura total da viewport */
+            padding: 20px; /* Padding ao redor do conteúdo principal */
+            overflow-x: hidden; /* Evita rolagem horizontal indesejada no body */
+        }
+
+        /* Novo wrapper principal para todo o conteúdo */
+        .main-wrapper {
+            width: 100%; /* Ocupa a largura total do pai (item flex do body) */
+            max-width: 1200px; /* Largura máxima para todo o conteúdo da aplicação */
+            display: flex;
+            flex-direction: column; /* Empilha título, container e botão verticalmente */
+            gap: 20px; /* Espaçamento entre essas seções principais */
+        }
+
+        h1, h2, h3 {
+            color: var(--highlight-color);
+            text-align: center; /* Garante que o título esteja centralizado */
+            margin-bottom: 0; /* Deixa o gap do main-wrapper controlar o espaçamento */
+        }
+
+        /* Container principal do aplicativo (agora um filho do main-wrapper) */
+        .container {
+            background-color: var(--secondary-bg);
+            border-radius: 12px;
+            box-shadow: 0 8px 20px var(--shadow-medium);
+            width: 100%; /* Ocupa a largura total do main-wrapper */
+            padding: 30px;
+            display: grid;
+            gap: 20px;
+            grid-template-columns: 1fr; /* Padrão: coluna única para mobile */
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                grid-template-columns: 1fr 1.8fr; /* Ajustado para 1fr 1.8fr para melhor equilíbrio */
+            }
+        }
+
+        /* Left and Right column styling */
+        .left-column, .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 20px; /* Espaço entre os cards dentro de cada coluna */
+            min-width: 0; /* Permite que a coluna encolha e o overflow-x: auto do container funcione */
+        }
+
+        /* Card styles */
+        .card {
+            background-color: var(--secondary-bg);
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 8px 16px var(--shadow-medium);
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            flex-grow: 1; /* Permite que os cards cresçam e preencham o espaço disponível nas colunas */
+        }
+
+        /* Form inputs */
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="date"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: var(--primary-bg);
+            color: var(--text-color);
+            font-size: 1rem;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+            box-sizing: border-box; /* Garante que padding e border sejam incluídos na largura e altura total do elemento */
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        input[type="date"]:focus,
+        select:focus,
+        input[type="text"]:focus,
+        textarea:focus {
+            border-color: var(--highlight-color);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        /* Botões */
+        button {
+            background-color: var(--highlight-color);
+            color: var(--secondary-bg);
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 8px var(--shadow-light);
+        }
+
+        button:hover {
+            background-color: var(--highlight-dark);
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-start; /* Alinha os botões ao início */
+        }
+
+        .btn-group button {
+            flex-grow: 1;
+            min-width: 120px;
+        }
+
+        /* Ajustes específicos para os botões de edição/exclusão de categoria */
+        .category-list li button {
+            padding: 6px 10px; /* Reduz o padding */
+            font-size: 0.85rem; /* Reduz o tamanho da fonte */
+            min-width: unset; /* Remove min-width para permitir que encolham */
+            flex-grow: 0; /* Não permite que cresçam */
+        }
+
+        .btn-edit {
+            background-color: var(--blue-button); /* Azul para o botão de edição */
+        }
+
+        .btn-delete {
+            background-color: var(--negative-color); /* Vermelho para o botão de exclusão */
+        }
+
+        .btn-edit:hover {
+            background-color: var(--blue-button-dark); /* Azul mais escuro no hover */
+        }
+
+        .btn-delete:hover {
+            background-color: var(--negative-dark); /* Vermelho mais escuro no hover */
+        }
+
+        /* Tabela de Gastos */
+        .expense-list-section {
+            overflow-x: auto; /* Permite rolagem horizontal para a tabela */
+            width: 100%; /* Garante que a seção ocupe a largura total disponível */
+            max-height: 400px; /* Limita a altura da seção de gastos para evitar que ela seja gigantesca */
+            overflow-y: auto; /* Adiciona rolagem vertical se o conteúdo exceder a altura máxima */
+        }
+
+        .expense-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            min-width: 600px; /* Mantém uma largura mínima para a tabela */
+        }
+
+        .expense-table th,
+        .expense-table td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .expense-table th {
+            background-color: var(--highlight-color);
+            font-weight: 700;
+            color: var(--secondary-bg);
+            position: sticky;
+            top: 0;
+            z-index: 1; /* Garante que o cabeçalho fique sobre o conteúdo rolante */
+        }
+
+        .expense-table tbody tr:nth-child(even) {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .expense-table tbody tr:hover {
+            background-color: rgba(240, 240, 240, 0.1);
+        }
+
+        .expense-table td:last-child {
+            white-space: nowrap; /* Mantém isso para a última célula para evitar que os botões quebrem linha */
+            display: flex; /* Torna os botões um contêiner flexível */
+            gap: 5px; /* Adiciona um pequeno espaçamento entre os botões */
+            flex-wrap: wrap; /* Permite que os botões quebrem linha se o espaço for muito limitado */
+            justify-content: flex-end; /* Alinha os botões à direita */
+        }
+
+        /* Mensagens de Feedback */
+        #feedback-message {
+            background-color: var(--info-color);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            visibility: hidden;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        #feedback-message.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Seção de Categorias */
+        .category-management {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .category-list {
+            list-style: none;
+            padding: 0;
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: var(--primary-bg);
+        }
+
+        .category-list li {
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 10px; /* Espaço entre os principais itens */
+            flex-wrap: wrap; /* Permite que os itens quebrem linha em telas menores */
+        }
+
+        .category-list li:last-child {
+            border-bottom: none;
+        }
+
+        .category-list li span { /* Este é o nome da categoria */
+            flex-grow: 1; /* Permite que ele ocupe o espaço disponível */
+            flex-shrink: 1; /* Permite que ele encolha se necessário */
+            min-width: 100px; /* Garante uma largura mínima para o nome */
+            font-weight: 500;
+            white-space: nowrap; /* Mantém o nome em uma única linha */
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-color); /* Garante que a cor do texto seja visível */
+        }
+
+        .category-list li div { /* Este é o contêiner dos botões */
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0; /* Impede que os botões encolham */
+        }
+
+        /* NEW SECTION: Balances and Budgets */
+        .balances-summary-section {
+            margin-top: 20px; /* Add some space above this new section */
+        }
+
+        .category-balances-list {
+            list-style: none;
+            padding: 0;
+            margin-top: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: var(--primary-bg);
+            max-height: 300px; /* Limit height for scroll if many categories */
+            overflow-y: auto;
+        }
+
+        .category-balances-list li {
+            padding: 10px 15px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .category-balances-list li:last-child {
+            border-bottom: none;
+        }
+
+        .category-balance-name {
+            font-weight: 600;
+            color: var(--text-color);
+            flex-basis: 100%; /* Occupy full width on small screens */
+            margin-bottom: 5px; /* Space below name on small screens */
+        }
+
+        @media (min-width: 480px) { /* Adjust for slightly larger mobile screens */
+            .category-balance-name {
+                flex-basis: auto; /* Allow name to take less width */
+                margin-bottom: 0;
+                flex-grow: 1; /* Let it grow */
+            }
+        }
+
+        .category-balance-details {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            flex-grow: 1;
+            justify-content: flex-end; /* Align details to the right */
+            font-size: 0.95em;
+            color: var(--light-text-color);
+        }
+
+        .category-balance-details span {
+            white-space: nowrap; /* Keep values on one line */
+        }
+
+        .category-balance-details .remaining-value {
+            font-weight: 700;
+        }
+
+        /* Gráfico de Resumo */
+        .chart-section {
+            margin-top: 20px;
+        }
+
+        .chart-summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: var(--primary-bg);
+            border-radius: 8px;
+            box-shadow: 0 2px 4px var(--shadow-light);
+        }
+
+        .chart-summary h3 {
+            margin: 0;
+            color: var(--highlight-color);
+        }
+
+        .chart-summary p {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-color);
+        }
+
+        /* Styles for total remaining balance (positive/negative) */
+        .chart-summary p.positive {
+            color: var(--positive-balance);
+        }
+
+        .chart-summary p.negative {
+            color: var(--negative-balance);
+        }
+
+        .chart-summary p.neutral {
+            color: var(--neutral-balance);
+        }
+
+        .chart-bars {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .chart-bar-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .chart-bar-label {
+            min-width: 100px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .chart-bar-container {
+            flex-grow: 1;
+            background-color: var(--border-color);
+            border-radius: 5px;
+            height: 25px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .chart-bar {
+            height: 100%;
+            background-color: var(--highlight-color);
+            width: 0%;
+            transition: width 0.8s ease-out;
+            border-radius: 5px;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .chart-bar-overlay-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--secondary-bg);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            white-space: nowrap;
+            z-index: 2;
+            padding: 0 5px;
+            box-sizing: border-box;
+            width: 100%;
+            text-align: center;
+        }
+
+        /* New style for budget line in chart */
+        .budget-line {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            width: 2px; /* Espessura da linha */
+            background-color: var(--light-text-color); /* Cor da linha */
+            border-left: 1px dashed var(--light-text-color); /* Linha tracejada para o orçamento */
+            box-sizing: border-box;
+            z-index: 1; /* Abaixo do texto de sobreposição */
+        }
+
+        .budget-label-text {
+            position: absolute;
+            top: -15px; /* Posição acima da barra */
+            transform: translateX(-50%);
+            color: var(--light-text-color);
+            font-size: 0.75rem;
+            font-weight: 500;
+            white-space: nowrap;
+            z-index: 3; /* Acima da barra e da linha */
+            text-shadow: 0 0 3px rgba(0,0,0,0.8); /* Adiciona sombra para legibilidade */
+        }
+
+        .chart-legend {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .legend-color-box {
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+
+        /* Modal de Confirmação */
+        .modal {
+            position: fixed;
+            z-index: 1001;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.7);
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            pointer-events: none;
+            display: none; /* Adicionado para garantir que ele esteja oculto por padrão */
+        }
+
+        .modal.show {
+            opacity: 1;
+            pointer-events: auto;
+            display: flex; /* Garante que se torne flex quando mostrado */
+        }
+
+        .modal-content {
+            background-color: var(--secondary-bg);
+            margin: auto;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 10px 20px var(--shadow-medium);
+            transform: translateY(-20px);
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .modal.show .modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-content h3 {
+            color: var(--text-color);
+            margin-bottom: 20px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .modal-buttons button {
+            flex: 1;
+            max-width: 150px;
+        }
+
+        .modal-buttons .btn-cancel {
+            background-color: var(--light-text-color);
+        }
+
+        .modal-buttons .btn-cancel:hover {
+            background-color: #5a6268;
+        }
+
+        /* Filtros */
+        .filter-section {
+            display: grid;
+            grid-template-columns: 1fr; /* Padrão: coluna única para filtros */
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: var(--primary-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        @media (min-width: 768px) { /* Aplica layout de filtro multi-coluna apenas quando o container também é multi-coluna */
+            .filter-section {
+                grid-template-columns: 1fr 1fr auto;
+            }
+        }
+
+        /* Botão de zerar dados */
+        .reset-data-button {
+            background-color: var(--negative-color);
+            margin-top: 20px; /* Adiciona margem superior para separar do container */
+            width: 100%; /* Garante que ocupe a largura total do main-wrapper */
+            max-width: 1200px; /* Limita a largura máxima para alinhar com o container */
+            margin-left: auto; /* Centraliza o botão */
+            margin-right: auto; /* Centraliza o botão */
+            display: block; /* Garante que seja um elemento de bloco para margin: auto funcionar */
+        }
+        .reset-data-button:hover {
+            background-color: var(--negative-dark);
+        }
+    </style>
+</head>
+<body>
+    <div id="feedback-message"></div>
+
+    <!-- Novo wrapper principal para todo o conteúdo -->
+    <div class="main-wrapper">
+        <h1>Gerenciador de Gastos Pessoais (Frontend Simples)</h1>
+
+        <div class="container">
+            <!-- Coluna Esquerda: Registro de Gastos e Gerenciamento de Categorias -->
+            <div class="left-column">
+                <section class="card">
+                    <h2>Registrar Novo Gasto</h2>
+                    <form id="expense-form">
+                        <input type="hidden" id="expense-id">
+                        <div class="form-group">
+                            <label for="expense-value">Valor (R$):</label>
+                            <input type="number" id="expense-value" placeholder="Ex: 50.25" step="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="expense-date">Data:</label>
+                            <input type="date" id="expense-date" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="expense-category">Categoria:</label>
+                            <select id="expense-category" required>
+                                <!-- Categorias serão carregadas via JS -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="expense-description">Descrição:</label>
+                            <textarea id="expense-description" placeholder="Ex: Almoço no restaurante X"></textarea>
+                        </div>
+                        <button type="submit" id="save-expense-btn">Salvar Gasto</button>
+                    </form>
+                </section>
+
+                <section class="card category-management">
+                    <h2>Gerenciar Categorias</h2>
+                    <div class="form-group">
+                        <label for="new-category-name">Nome da Categoria:</label>
+                        <input type="text" id="new-category-name" placeholder="Nome da categoria">
+                    </div>
+                    <div class="form-group">
+                        <label for="new-category-budget">Orçamento Mensal (R$):</label>
+                        <input type="number" id="new-category-budget" placeholder="0.00" step="0.01" value="0.00">
+                    </div>
+                    <div class="btn-group">
+                        <button id="add-category-btn">Adicionar Categoria</button>
+                    </div>
+
+                    <h3>Minhas Categorias</h3>
+                    <ul id="category-list" class="category-list">
+                        <!-- Categorias serão carregadas via JS -->
+                    </ul>
+                </section>
+            </div>
+
+            <!-- Coluna Direita: Listagem de Gastos, Gráfico Resumo e Saldos/Orçamentos -->
+            <div class="right-column">
+                <section class="card expense-list-section">
+                    <h2>Meus Gastos</h2>
+
+                    <div class="filter-section">
+                        <div class="form-group">
+                            <label for="filter-category">Filtrar por Categoria:</label>
+                            <select id="filter-category">
+                                <option value="">Todas</option>
+                                <!-- Categorias serão carregadas via JS -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="filter-date">Filtrar por Data:</label>
+                            <input type="date" id="filter-date">
+                        </div>
+                        <button id="clear-filters-btn">Limpar Filtros</button>
+                    </div>
+
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        <table class="expense-table">
+                            <thead>
+                                <tr>
+                                    <th>Valor</th>
+                                    <th>Data</th>
+                                    <th>Categoria</th>
+                                    <th>Descrição</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="expense-table-body">
+                                <!-- Gastos serão carregados via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="card chart-section">
+                    <h2>Resumo dos Gastos</h2>
+                    <div id="chart-bars" class="chart-bars">
+                        <!-- Barras do gráfico serão carregadas via JS -->
+                    </div>
+                    <div id="chart-legend" class="chart-legend">
+                        <!-- Legenda do gráfico será carregada via JS -->
+                    </div>
+                </section>
+
+                <!-- Nova Seção: Saldos e Orçamentos -->
+                <section class="card balances-summary-section">
+                    <h2>Saldos e Orçamentos</h2>
+                    <div class="chart-summary">
+                        <h3>Total Geral Gasto:</h3>
+                        <p id="total-expenses">R$ 0,00</p>
+                    </div>
+                    <div class="chart-summary">
+                        <h3>Orçamento Total:</h3>
+                        <p id="total-budget">R$ 0,00</p>
+                    </div>
+                    <div class="chart-summary">
+                        <h3>Saldo Total Restante:</h3>
+                        <p id="total-remaining-balance">R$ 0,00</p>
+                    </div>
+                    
+                    <h3>Saldos por Categoria</h3>
+                    <ul id="category-balances-list" class="category-balances-list">
+                        <!-- Saldos por categoria serão carregados via JS -->
+                    </ul>
+                </section>
+            </div>
+        </div>
+        <!-- Botão "Zerar Todos os Dados" movido para dentro do main-wrapper -->
+        <button id="reset-data-btn" class="reset-data-button">Zerar Todos os Dados</button>
+    </div>
+
+    <!-- Modal de Confirmação -->
+    <div id="confirmation-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-title">Confirmação</h3>
+            <p id="modal-message">Você tem certeza?</p>
+            <div class="modal-buttons">
+                <button id="modal-confirm-btn">Confirmar</button>
+                <button id="modal-cancel-btn" class="btn-cancel">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Variáveis Globais e Inicialização ---
+        let expenses = []; // Array para armazenar os gastos
+        let categories = []; // Array para armazenar as categorias
+        const DEFAULT_CATEGORY_NAME = 'Outros'; // Categoria padrão para realocação
+
+        // Elementos do DOM
+        const expenseForm = document.getElementById('expense-form');
+        const expenseIdInput = document.getElementById('expense-id');
+        const expenseValueInput = document.getElementById('expense-value');
+        const expenseDateInput = document.getElementById('expense-date');
+        const expenseCategorySelect = document.getElementById('expense-category');
+        const expenseDescriptionInput = document.getElementById('expense-description');
+        const saveExpenseBtn = document.getElementById('save-expense-btn');
+        const expenseTableBody = document.getElementById('expense-table-body');
+        const feedbackMessage = document.getElementById('feedback-message');
+
+        const newCategoryNameInput = document.getElementById('new-category-name');
+        const newCategoryBudgetInput = document.getElementById('new-category-budget');
+        const addCategoryBtn = document.getElementById('add-category-btn');
+        const categoryListUl = document.getElementById('category-list');
+
+        const totalExpensesDisplay = document.getElementById('total-expenses');
+        const totalBudgetDisplay = document.getElementById('total-budget');
+        const totalRemainingBalanceDisplay = document.getElementById('total-remaining-balance');
+        const categoryBalancesList = document.getElementById('category-balances-list');
+
+        const chartBarsDiv = document.getElementById('chart-bars');
+        const chartLegendDiv = document.getElementById('chart-legend');
+
+        const filterCategorySelect = document.getElementById('filter-category');
+        const filterDateInput = document.getElementById('filter-date');
+        const clearFiltersBtn = document.getElementById('clear-filters-btn');
+
+        const resetDataBtn = document.getElementById('reset-data-btn');
+
+        // Modal de Confirmação
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+        const modalCancelBtn = document.getElementById('modal-cancel-btn');
+
+        let currentConfirmAction = null; // Função a ser executada na confirmação do modal
+
+        // --- Funções de Utilitário ---
+
+        /**
+         * Gera um UUID (Universally Unique Identifier) simples.
+         * @returns {string} Um UUID único.
+         */
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        /**
+         * Formata um valor numérico para o formato de moeda Real (R$).
+         * @param {number} value - O valor a ser formatado.
+         * @returns {string} O valor formatado como string.
+         */
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(value);
+        }
+
+        /**
+         * Formata uma data para o formato DD/MM/AAAA.
+         * @param {string} dateString - A string da data no formato YYYY-MM-DD.
+         * @returns {string} A data formatada como string.
+         */
+        function formatDate(dateString) {
+            const [year, month, day] = dateString.split('-');
+            return `${day}/${month}/${year}`;
+        }
+
+        /**
+         * Exibe uma mensagem de feedback na tela.
+         * @param {string} message - A mensagem a ser exibida.
+         * @param {string} type - O tipo da mensagem (success, error, info).
+         */
+        function showFeedback(message, type = 'info') {
+            feedbackMessage.textContent = message;
+            feedbackMessage.className = `show ${type}`; // Adiciona a classe 'show' e o tipo
+            // Define a cor de fundo com base nas variáveis CSS
+            if (type === 'success') {
+                feedbackMessage.style.backgroundColor = 'var(--success-color, #28a745)';
+            } else if (type === 'error') {
+                feedbackMessage.style.backgroundColor = 'var(--error-color, #dc3545)';
+            } else {
+                feedbackMessage.style.backgroundColor = 'var(--info-color, #17a2b8)';
+            }
+            setTimeout(() => {
+                feedbackMessage.className = ''; // Remove as classes para esconder
+            }, 3000); // Esconde após 3 segundos
+        }
+
+        /**
+         * Gera uma cor hexadecimal aleatória.
+         * Garante que seja distinta das cores já usadas para melhor visualização no gráfico.
+         * @param {Array<string>} existingColors - Array de cores já em uso.
+         * @returns {string} Uma nova string de cor hexadecimal (ex: "#RRGGBB").
+         */
+        function generateDistinctColor(existingColors) {
+            const letters = '0123456789ABCDEF';
+            let newColor;
+            let attempts = 0;
+            do {
+                newColor = '#';
+                for (let i = 0; i < 6; i++) {
+                    newColor += letters[Math.floor(Math.random() * 16)];
+                }
+                // Verifica a luminosidade da cor para evitar tons muito escuros
+                const r = parseInt(newColor.substring(1, 3), 16);
+                const g = parseInt(newColor.substring(3, 5), 16);
+                const b = parseInt(newColor.substring(5, 7), 16);
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                
+                // A cor é considerada "brilhante" o suficiente se a luminosidade for maior que 128 (meio do caminho de 0-255)
+                // E se não estiver em existingColors
+                if (brightness > 128 && !existingColors.includes(newColor)) {
+                    return newColor;
+                }
+                attempts++;
+            } while (attempts < 200); // Limita as tentativas para evitar loops infinitos em casos extremos
+            
+            // Se não encontrar uma cor "brilhante" e distinta após muitas tentativas,
+            // retorna uma cor aleatória, mesmo que não seja ideal.
+            return newColor;
+        }
+
+        /**
+         * Exibe o modal de confirmação.
+         * @param {string} title - Título do modal.
+         * @param {string} message - Mensagem do modal.
+         * @param {Function} onConfirm - Função a ser executada se o usuário confirmar.
+         */
+        function showConfirmationModal(title, message, onConfirm) {
+            modalTitle.innerHTML = title;
+            modalMessage.innerHTML = message;
+            currentConfirmAction = onConfirm;
+            confirmationModal.classList.add('show');
+            confirmationModal.style.display = 'flex'; // Garante que o modal seja visível
+        }
+
+        /**
+         * Esconde o modal de confirmação.
+         */
+        function hideConfirmationModal() {
+            confirmationModal.classList.remove('show');
+            confirmationModal.style.display = 'none'; // Garante que o modal seja ocultado
+            currentConfirmAction = null;
+        }
+
+        // Helper para obter valor de variável CSS
+        function varToString(variableName) {
+            return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+        }
+
+        // --- Funções de Armazenamento de Dados (localStorage) ---
+
+        /**
+         * Carrega os dados de gastos do localStorage.
+         */
+        function loadExpensesFromLocalStorage() {
+            const storedExpenses = localStorage.getItem('expenses');
+            if (storedExpenses) {
+                expenses = JSON.parse(storedExpenses);
+            } else {
+                expenses = [];
+            }
+        }
+
+        /**
+         * Salva os gastos no localStorage.
+         */
+        function saveExpensesToLocalStorage() {
+            localStorage.setItem('expenses', JSON.stringify(expenses));
+        }
+
+        /**
+         * Carrega os dados de categorias do localStorage.
+         */
+        function loadCategoriesFromLocalStorage() {
+            const storedCategories = localStorage.getItem('categories');
+            if (storedCategories) {
+                categories = JSON.parse(storedCategories);
+            } else {
+                // Categorias padrão se não houver nenhuma salva
+                categories = [
+                    { id: 1, name: 'Alimentação', budget: 0.0 },
+                    { id: 2, name: 'Transporte', budget: 0.0 },
+                    { id: 3, name: 'Lazer', budget: 0.0 },
+                    { id: 4, name: 'Moradia', budget: 0.0 },
+                    { id: 5, name: 'Saúde', budget: 0.0 },
+                    { id: 6, name: 'Educação', budget: 0.0 },
+                    { id: 7, name: 'Outros', budget: 0.0 }
+                ];
+                saveCategoriesToLocalStorage(); // Salva as categorias padrão
+            }
+            // Garante que a categoria padrão "Outros" sempre exista
+            if (!categories.some(cat => cat.name === DEFAULT_CATEGORY_NAME)) {
+                categories.push({ id: Date.now(), name: DEFAULT_CATEGORY_NAME, budget: 0.0 });
+                saveCategoriesToLocalStorage();
+            }
+        }
+
+        /**
+         * Salva as categorias no localStorage.
+         */
+        function saveCategoriesToLocalStorage() {
+            localStorage.setItem('categories', JSON.stringify(categories));
+        }
+
+        // --- Funções de Gerenciamento de Gastos ---
+
+        /**
+         * Adiciona ou edita um gasto.
+         * @param {Event} event - O evento de submit do formulário.
+         */
+        function addOrUpdateExpense(event) {
+            event.preventDefault();
+
+            const id = expenseIdInput.value;
+            const value = parseFloat(expenseValueInput.value);
+            const date = expenseDateInput.value;
+            const categoryName = expenseCategorySelect.value;
+            const description = expenseDescriptionInput.value.trim();
+
+            if (isNaN(value) || value <= 0) {
+                showFeedback('Por favor, insira um valor válido para o gasto.', 'error');
+                return;
+            }
+            if (!date) {
+                showFeedback('Por favor, selecione uma data para o gasto.', 'error');
+                return;
+            }
+            if (!categoryName) {
+                showFeedback('Por favor, selecione uma categoria para o gasto.', 'error');
+                return;
+            }
+
+            if (id) {
+                // Editar gasto existente
+                const expenseIndex = expenses.findIndex(exp => exp.id === id);
+                if (expenseIndex !== -1) {
+                    expenses[expenseIndex] = { id, value, date, category: categoryName, description };
+                    showFeedback('Gasto atualizado com sucesso!', 'success');
+                }
+            } else {
+                // Adicionar novo gasto
+                const newExpense = {
+                    id: generateUUID(),
+                    value,
+                    date,
+                    category: categoryName,
+                    description
+                };
+                expenses.push(newExpense);
+                showFeedback('Gasto adicionado com sucesso!', 'success');
+            }
+
+            saveExpensesToLocalStorage();
+            initializeDataAndRender(); // Re-renderiza tudo para atualizar saldos e gráficos
+            expenseForm.reset(); // Limpa o formulário
+            expenseIdInput.value = ''; // Limpa o ID para garantir que o próximo seja um novo gasto
+            saveExpenseBtn.textContent = 'Salvar Gasto'; // Volta o texto do botão para "Salvar Gasto"
+        }
+
+        /**
+         * Preenche o formulário de gastos para edição.
+         * @param {string} id - O ID do gasto a ser editado.
+         */
+        function editExpense(id) {
+            const expense = expenses.find(exp => exp.id === id);
+            if (expense) {
+                expenseIdInput.value = expense.id;
+                expenseValueInput.value = expense.value;
+                expenseDateInput.value = expense.date;
+                expenseCategorySelect.value = expense.category;
+                expenseDescriptionInput.value = expense.description;
+                saveExpenseBtn.textContent = 'Atualizar Gasto';
+                window.scrollTo({ top: 0, behavior: 'smooth' }); // Rola para o topo para o formulário
+            } else {
+                showFeedback('Gasto não encontrado para edição.', 'error');
+            }
+        }
+
+        /**
+         * Exclui um gasto.
+         * @param {string} id - O ID do gasto a ser excluído.
+         */
+        function deleteExpense(id) {
+            showConfirmationModal(
+                'Confirmar Exclusão',
+                'Tem certeza que deseja excluir este gasto?',
+                () => {
+                    expenses = expenses.filter(exp => exp.id !== id);
+                    saveExpensesToLocalStorage();
+                    initializeDataAndRender(); // Re-renderiza tudo
+                    showFeedback('Gasto excluído com sucesso!', 'success');
+                    hideConfirmationModal();
+                }
+            );
+        }
+
+        /**
+         * Renderiza a lista de gastos na tabela, aplicando filtros se houver.
+         */
+        function renderExpenses() {
+            expenseTableBody.innerHTML = ''; // Limpa a tabela
+
+            const filterCategory = filterCategorySelect.value;
+            const filterDate = filterDateInput.value;
+
+            const filteredExpenses = expenses.filter(expense => {
+                const matchesCategory = filterCategory === '' || expense.category === filterCategory;
+                const matchesDate = filterDate === '' || expense.date === filterDate;
+                return matchesCategory && matchesDate;
+            }).sort((a, b) => new Date(b.date) - new Date(a.date)); // Ordena por data mais recente
+
+            if (filteredExpenses.length === 0) {
+                const row = expenseTableBody.insertRow();
+                const cell = row.insertCell();
+                cell.colSpan = 5;
+                cell.textContent = 'Nenhum gasto encontrado.';
+                cell.style.textAlign = 'center';
+                cell.style.padding = '20px';
+                return;
+            }
+
+            filteredExpenses.forEach(expense => {
+                const row = expenseTableBody.insertRow();
+                row.innerHTML = `
+                    <td>${formatCurrency(expense.value)}</td>
+                    <td>${formatDate(expense.date)}</td>
+                    <td>${expense.category}</td>
+                    <td>${expense.description || '-'}</td>
+                    <td>
+                        <button class="btn-edit" onclick="editExpense('${expense.id}')">Editar</button>
+                        <button class="btn-delete" onclick="deleteExpense('${expense.id}')">Excluir</button>
+                    </td>
+                `;
+            });
+        }
+
+        // --- Funções de Gerenciamento de Categorias ---
+
+        /**
+         * Adiciona uma nova categoria.
+         */
+        function addCategory() {
+            const newCategoryName = newCategoryNameInput.value.trim();
+            const newCategoryBudget = parseFloat(newCategoryBudgetInput.value);
+
+            if (!newCategoryName) {
+                showFeedback('Por favor, insira um nome para a categoria.', 'error');
+                return;
+            }
+            if (isNaN(newCategoryBudget) || newCategoryBudget < 0) {
+                showFeedback('Por favor, insira um orçamento válido (número não negativo).', 'error');
+                return;
+            }
+            if (categories.some(cat => cat.name === newCategoryName)) {
+                showFeedback('Essa categoria já existe.', 'info');
+                return;
+            }
+
+            const newCategory = {
+                id: categories.length > 0 ? Math.max(...categories.map(c => c.id)) + 1 : 1, // Gera um ID simples
+                name: newCategoryName,
+                budget: newCategoryBudget
+            };
+            categories.push(newCategory);
+            saveCategoriesToLocalStorage();
+            initializeDataAndRender();
+            showFeedback(`Categoria "${newCategoryName}" adicionada!`, 'success');
+            newCategoryNameInput.value = '';
+            newCategoryBudgetInput.value = '0.00';
+        }
+
+        /**
+         * Renomeia uma categoria existente e atualiza seu orçamento.
+         * @param {number} categoryId - O ID da categoria a ser renomeada/atualizada.
+         * @param {string} oldName - O nome antigo da categoria.
+         * @param {number} oldBudget - O orçamento antigo da categoria.
+         * @param {string} newName - O novo nome da categoria.
+         * @param {number} newBudget - O novo orçamento da categoria.
+         */
+        function renameCategory(categoryId, oldName, oldBudget, newName, newBudget) {
+            // Garante que newBudget seja um número, padrão para 0 se não for
+            newBudget = typeof newBudget === 'number' ? newBudget : 0;
+
+            // Só prossegue se o nome ou o orçamento mudaram
+            if (oldName === newName && oldBudget === newBudget) {
+                showFeedback('Nenhuma alteração detectada.', 'info');
+                return;
+            }
+
+            if (categories.some(cat => cat.name === newName && cat.id !== categoryId)) {
+                showFeedback('Já existe outra categoria com esse nome.', 'error');
+                return;
+            }
+            if (isNaN(newBudget) || newBudget < 0) {
+                showFeedback('Por favor, insira um orçamento válido (número não negativo).', 'error');
+                return;
+            }
+
+            const categoryIndex = categories.findIndex(cat => cat.id === categoryId);
+            if (categoryIndex !== -1) {
+                categories[categoryIndex].name = newName;
+                categories[categoryIndex].budget = newBudget;
+
+                // Atualiza os gastos com a nova categoria, se o nome mudou
+                if (oldName !== newName) {
+                    expenses.forEach(expense => {
+                        if (expense.category === oldName) {
+                            expense.category = newName;
+                        }
+                    });
+                    saveExpensesToLocalStorage();
+                }
+                saveCategoriesToLocalStorage();
+                initializeDataAndRender();
+                showFeedback(`Categoria "${oldName}" renomeada para "${newName}" e orçamento atualizado!`, 'success');
+            } else {
+                showFeedback('Categoria não encontrada para edição.', 'error');
+            }
+        }
+
+        /**
+         * Exclui uma categoria. Gastos associados são realocados para a categoria padrão.
+         * @param {number} categoryIdToDelete - O ID da categoria a ser excluída.
+         * @param {string} categoryNameToDelete - O nome da categoria a ser excluída.
+         */
+        function deleteCategory(categoryIdToDelete, categoryNameToDelete) {
+            if (categoryNameToDelete === DEFAULT_CATEGORY_NAME) {
+                showFeedback(`A categoria "${DEFAULT_CATEGORY_NAME}" não pode ser excluída.`, 'error');
+                return;
+            }
+
+            showConfirmationModal(
+                'Confirmar Exclusão de Categoria',
+                `Tem certeza que deseja excluir a categoria "${categoryNameToDelete}"? Os gastos associados serão movidos para "${DEFAULT_CATEGORY_NAME}".`,
+                () => {
+                    categories = categories.filter(cat => cat.id !== categoryIdToDelete);
+                    // Realoca gastos da categoria excluída para a categoria padrão
+                    expenses.forEach(expense => {
+                        if (expense.category === categoryNameToDelete) {
+                            expense.category = DEFAULT_CATEGORY_NAME;
+                        }
+                    });
+                    saveCategoriesToLocalStorage();
+                    saveExpensesToLocalStorage();
+                    initializeDataAndRender();
+                    showFeedback(`Categoria "${categoryNameToDelete}" excluída e gastos realocados para "${DEFAULT_CATEGORY_NAME}".`, 'success');
+                    hideConfirmationModal();
+                }
+            );
+        }
+
+        /**
+         * Solicita ao usuário um novo nome e orçamento para a categoria.
+         * @param {number} categoryId - O ID da categoria.
+         * @param {string} oldName - O nome atual da categoria.
+         * @param {number} oldBudget - O orçamento atual da categoria.
+         */
+        function promptRenameCategory(categoryId, oldName, oldBudget) {
+            // Garante que oldBudget seja um número válido para toFixed
+            const safeOldBudget = typeof oldBudget === 'number' ? oldBudget : 0;
+
+            showConfirmationModal(
+                'Editar Categoria',
+                `Insira o novo nome para "${oldName}":<br><input type="text" id="new-category-input" value="${oldName}" style="margin-top: 10px; width: calc(100% - 24px);">` +
+                `<br><br>Insira o novo orçamento para "${oldName}":<br><input type="number" id="new-budget-input" value="${safeOldBudget.toFixed(2)}" step="0.01" style="margin-top: 10px; width: calc(100% - 24px);">`,
+                () => {
+                    const newNameInput = document.getElementById('new-category-input');
+                    const newBudgetInput = document.getElementById('new-budget-input');
+                    const newName = newNameInput.value.trim();
+                    const newBudget = parseFloat(newBudgetInput.value);
+
+                    if (newName && !isNaN(newBudget) && newBudget >= 0) {
+                        renameCategory(categoryId, oldName, safeOldBudget, newName, newBudget);
+                    } else {
+                        showFeedback('O nome da categoria não pode ser vazio e o orçamento deve ser um número não negativo.', 'error');
+                    }
+                    hideConfirmationModal();
+                }
+            );
+        }
+
+        /**
+         * Renderiza a lista de categorias e preenche os selects de categoria.
+         */
+        function renderCategories() {
+            // Limpa as listas e selects existentes
+            categoryListUl.innerHTML = '';
+            expenseCategorySelect.innerHTML = '';
+            filterCategorySelect.innerHTML = '<option value="">Todas</option>'; // Adiciona opção "Todas" para o filtro
+
+            categories.forEach(category => {
+                // Adiciona ao select de registro de gastos
+                const option = document.createElement('option');
+                option.value = category.name;
+                option.textContent = category.name;
+                expenseCategorySelect.appendChild(option);
+
+                // Adiciona ao select de filtro
+                const filterOption = document.createElement('option');
+                filterOption.value = category.name;
+                filterOption.textContent = category.name;
+                filterCategorySelect.appendChild(filterOption);
+
+                // Adiciona à lista de gerenciamento de categorias
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <span>${category.name}</span>
+                    <div>
+                        <button class="btn-edit" onclick="promptRenameCategory(${category.id}, '${category.name}', ${category.budget})">Editar</button>
+                        <button class="btn-delete" onclick="deleteCategory(${category.id}, '${category.name}')">Excluir</button>
+                    </div>
+                `;
+                if (category.name === DEFAULT_CATEGORY_NAME) {
+                    // Desabilita botões de renomear/excluir para a categoria padrão
+                    li.querySelector('.btn-edit').disabled = true;
+                    li.querySelector('.btn-delete').disabled = true;
+                    li.querySelector('.btn-edit').style.opacity = '0.5';
+                    li.querySelector('.btn-delete').style.opacity = '0.5';
+                    li.querySelector('.btn-edit').style.cursor = 'not-allowed';
+                    li.querySelector('.btn-delete').style.cursor = 'not-allowed';
+                }
+                categoryListUl.appendChild(li);
+            });
+        }
+
+        /**
+         * Renderiza o resumo geral e por categoria dos saldos e orçamentos.
+         */
+        function renderBalancesSummary() {
+            categoryBalancesList.innerHTML = ''; // Limpa entradas anteriores
+
+            let totalExpensesValue = 0;
+            let totalBudgetValue = 0;
+            const categoryTotals = {}; // { nomeCategoria: { spent: 0, budget: 0 } }
+
+            // Inicializa totais de categorias com orçamento
+            categories.forEach(cat => {
+                const budget = typeof cat.budget === 'number' ? cat.budget : 0;
+                categoryTotals[cat.name] = { spent: 0, budget: budget };
+                totalBudgetValue += budget;
+            });
+
+            // Soma os gastos por categoria
+            expenses.forEach(exp => {
+                if (categoryTotals[exp.category]) {
+                    categoryTotals[exp.category].spent += exp.value;
+                } else {
+                    // Fallback para gastos cuja categoria pode ter sido excluída
+                    const defaultCat = categories.find(c => c.name === DEFAULT_CATEGORY_NAME);
+                    if (defaultCat) {
+                        categoryTotals[DEFAULT_CATEGORY_NAME].spent += exp.value;
+                    }
+                }
+                totalExpensesValue += exp.value;
+            });
+
+            // Atualiza exibição dos totais globais
+            totalExpensesDisplay.textContent = formatCurrency(totalExpensesValue);
+            totalBudgetDisplay.textContent = formatCurrency(totalBudgetValue);
+            const totalRemaining = totalBudgetValue - totalExpensesValue;
+            totalRemainingBalanceDisplay.textContent = formatCurrency(totalRemaining);
+
+            // Aplica cor com base no saldo restante total
+            totalRemainingBalanceDisplay.classList.remove('positive', 'negative', 'neutral');
+            if (totalRemaining < 0) {
+                totalRemainingBalanceDisplay.classList.add('negative');
+            } else if (totalRemaining > 0) {
+                totalRemainingBalanceDisplay.classList.add('positive');
+            } else {
+                totalRemainingBalanceDisplay.classList.add('neutral');
+            }
+
+            // Renderiza saldos por categoria
+            const sortedCategoryNames = Object.keys(categoryTotals).sort();
+
+            if (sortedCategoryNames.length === 0) {
+                categoryBalancesList.innerHTML = '<li class="no-balances-message">Nenhuma categoria ou gasto para exibir saldos.</li>';
+                return;
+            }
+
+            sortedCategoryNames.forEach(categoryName => {
+                const catData = categoryTotals[categoryName];
+                const spent = catData.spent;
+                const budget = catData.budget;
+                const remaining = budget - spent;
+
+                let remainingClass = 'neutral';
+                if (remaining < 0) {
+                    remainingClass = 'negative';
+                } else if (remaining > 0) {
+                    remainingClass = 'positive';
+                }
+
+                const listItem = document.createElement('li');
+                listItem.className = 'category-balance-item'; // Adiciona uma classe para estilização
+                listItem.innerHTML = `
+                    <span class="category-balance-name">${categoryName}:</span>
+                    <div class="category-balance-details">
+                        <span class="budget-value">Orçamento: ${formatCurrency(budget)}</span>
+                        <span class="spent-value">Gasto: ${formatCurrency(spent)}</span>
+                        <span class="remaining-value ${remainingClass}">Restante: ${formatCurrency(remaining)}</span>
+                    </div>
+                `;
+                categoryBalancesList.appendChild(listItem);
+            });
+        }
+
+        // --- Funções de Gráfico de Resumo ---
+
+        /**
+         * Renderiza o gráfico de resumo dos gastos.
+         */
+        function renderChart() {
+            chartBarsDiv.innerHTML = '';
+            chartLegendDiv.innerHTML = '';
+
+            let totalExpensesValueForChart = 0;
+            let totalBudgetValueForChart = 0;
+            const categoryTotalsForChart = {}; // { nomeCategoria: { spent: 0, budget: 0 } }
+            const categoryColors = {}; // Para armazenar as cores geradas para cada categoria
+
+            // Inicializa totais de categorias com orçamento para o gráfico
+            categories.forEach(cat => {
+                const budget = typeof cat.budget === 'number' ? cat.budget : 0;
+                categoryTotalsForChart[cat.name] = { spent: 0, budget: budget };
+                totalBudgetValueForChart += budget;
+                if (!categoryColors[cat.name]) {
+                    categoryColors[cat.name] = generateDistinctColor(Object.values(categoryColors));
+                }
+            });
+
+            // Soma os gastos por categoria para o gráfico
+            expenses.forEach(expense => {
+                totalExpensesValueForChart += expense.value;
+                if (categoryTotalsForChart[expense.category]) {
+                    categoryTotalsForChart[expense.category].spent += expense.value;
+                } else {
+                    const defaultCat = categories.find(c => c.name === DEFAULT_CATEGORY_NAME);
+                    if (defaultCat) {
+                        categoryTotalsForChart[DEFAULT_CATEGORY_NAME].spent += exp.value;
+                    }
+                }
+            });
+
+            if (totalExpensesValueForChart === 0 && totalBudgetValueForChart === 0) {
+                chartBarsDiv.innerHTML = '<p style="text-align: center; margin-top: 20px;">Nenhum gasto ou orçamento registrado para exibir o gráfico.</p>';
+                return;
+            }
+
+            // Cria as barras do gráfico e a legenda
+            const sortedCategoryNames = Object.keys(categoryTotalsForChart).sort((a, b) => categoryTotalsForChart[b].spent - categoryTotalsForChart[a].spent);
+
+            sortedCategoryNames.forEach(categoryName => {
+                const catData = categoryTotalsForChart[categoryName];
+                const spent = catData.spent;
+                const budget = catData.budget;
+                const totalForPercentage = Math.max(spent, budget, 1); // Usa o maior entre gasto/orçamento para porcentagem, evita divisão por zero
+
+                const spentPercentage = (spent / totalForPercentage) * 100;
+                const budgetPercentage = (budget / totalForPercentage) * 100;
+
+                // Só mostra categorias com gasto ou orçamento definido
+                if (spent > 0 || budget > 0) {
+                    const barItem = document.createElement('div');
+                    barItem.className = 'chart-bar-item';
+                    barItem.innerHTML = `
+                        <span class="chart-bar-label">${categoryName}:</span>
+                        <div class="chart-bar-container">
+                            <div class="chart-bar" style="background-color: ${categoryColors[categoryName]}; width: ${spentPercentage.toFixed(2)}%;"></div>
+                            <span class="chart-bar-overlay-text">Gasto: ${formatCurrency(spent)}</span>
+                            ${budget > 0 ? `<div class="budget-line" style="left: ${budgetPercentage.toFixed(2)}%;"></div><span class="budget-label-text" style="left: ${budgetPercentage.toFixed(2)}%;">Orçamento: ${formatCurrency(budget)}</span>` : ''}
+                        </div>
+                    `;
+                    chartBarsDiv.appendChild(barItem);
+
+                    // Adiciona item à legenda
+                    const legendItem = document.createElement('div');
+                    legendItem.className = 'legend-item';
+                    legendItem.innerHTML = `
+                        <div class="legend-color-box" style="background-color: ${categoryColors[categoryName]};"></div>
+                        <span>${categoryName}</span>
+                    `;
+                    chartLegendDiv.appendChild(legendItem);
+                }
+            });
+
+            // Adiciona uma legenda para a linha de orçamento se houver algum orçamento total
+            if (totalBudgetValueForChart > 0) {
+                const budgetLineLegend = document.createElement('div');
+                budgetLineLegend.className = 'legend-item';
+                budgetLineLegend.innerHTML = `
+                    <div class="legend-color-box" style="background-color: transparent; border: 1px dashed ${varToString('--light-text-color')};"></div>
+                    <span>Orçamento (Linha tracejada)</span>
+                `;
+                chartLegendDiv.appendChild(budgetLineLegend);
+            }
+        }
+
+        // --- Inicialização e Event Listeners ---
+
+        /**
+         * Inicializa os dados carregando do localStorage e renderiza todos os componentes da UI.
+         */
+        function initializeDataAndRender() {
+            loadCategoriesFromLocalStorage();
+            loadExpensesFromLocalStorage();
+            
+            renderCategories();
+            renderExpenses();
+            renderBalancesSummary();
+            renderChart();
+        }
+
+        // Event Listeners para botões do Modal de Confirmação
+        modalConfirmBtn.addEventListener('click', () => {
+            if (currentConfirmAction) {
+                currentConfirmAction(); // Executa a função armazenada
+            }
+        });
+
+        modalCancelBtn.addEventListener('click', hideConfirmationModal);
+
+        // Formulário de gastos
+        expenseForm.addEventListener('submit', addOrUpdateExpense);
+
+        // Botão de adicionar categoria
+        addCategoryBtn.addEventListener('click', addCategory);
+
+        // Filtros
+        filterCategorySelect.addEventListener('change', initializeDataAndRender);
+        filterDateInput.addEventListener('change', initializeDataAndRender);
+        clearFiltersBtn.addEventListener('click', () => {
+            filterCategorySelect.value = '';
+            filterDateInput.value = '';
+            initializeDataAndRender(); // Re-renderiza com filtros limpos
+            showFeedback('Filtros limpos!', 'info');
+        });
+
+        // Botão de zerar dados
+        resetDataBtn.addEventListener('click', () => {
+            showConfirmationModal(
+                'Zerar Todos os Dados',
+                'Esta ação irá apagar TODOS os seus gastos e categorias personalizadas. Tem certeza que deseja continuar?',
+                () => {
+                    localStorage.removeItem('expenses');
+                    localStorage.removeItem('categories');
+                    expenses = []; // Reseta array de gastos
+                    categories = []; // Reseta array de categorias
+                    initializeDataAndRender(); // Re-renderiza tudo (agora vazio ou com padrões)
+                    showFeedback('Todos os dados foram zerados!', 'success');
+                    hideConfirmationModal();
+                }
+            );
+        });
+
+        // Inicialização da Aplicação
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeDataAndRender();
+
+            // Define a data atual como padrão no campo de data do formulário
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            expenseDateInput.value = `${year}-${month}-${day}`;
+        });
+    </script>
+</body>
+</html>
